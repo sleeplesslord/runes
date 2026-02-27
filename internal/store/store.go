@@ -14,17 +14,49 @@ import (
 
 // Store handles persistence of runes
 type Store struct {
-	path string
-	mu   sync.RWMutex
+	globalPath string
+	localPath  string
+	mu         sync.RWMutex
 }
 
-// New creates a new Store
-func New(path string) (*Store, error) {
-	dir := filepath.Dir(path)
+// New creates a new Store with global path, auto-detects local
+func New(globalPath string) (*Store, error) {
+	dir := filepath.Dir(globalPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("creating store directory: %w", err)
+		return nil, fmt.Errorf("creating global store directory: %w", err)
 	}
-	return &Store{path: path}, nil
+
+	s := &Store{globalPath: globalPath}
+
+	// Check for local .runes directory
+	if localPath := findLocalRunesDir(); localPath != "" {
+		s.localPath = localPath
+	}
+
+	return s, nil
+}
+
+// findLocalRunesDir searches for .runes/ directory in current or parent directories
+func findLocalRunesDir() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	for {
+		runesDir := filepath.Join(dir, ".runes")
+		if info, err := os.Stat(runesDir); err == nil && info.IsDir() {
+			return filepath.Join(runesDir, "runes.jsonl")
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	return ""
 }
 
 // DefaultPath returns default storage path
@@ -36,17 +68,67 @@ func DefaultPath() string {
 	return filepath.Join(home, ".runes", "runes.jsonl")
 }
 
-// LoadAll reads all runes
-func (s *Store) LoadAll() ([]*rune.Rune, error) {
+// HasLocal returns true if local store exists
+func (s *Store) HasLocal() bool {
+	return s.localPath != ""
+}
+
+// LocalPath returns the local store path
+func (s *Store) LocalPath() string {
+	return s.localPath
+}
+
+// Scope defines where runes are stored
+type Scope int
+
+const (
+	ScopeGlobal Scope = iota
+	ScopeLocal
+)
+
+// LoadAll reads runes from specified scopes
+func (s *Store) LoadAll(scopes ...Scope) ([]*rune.Rune, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	file, err := os.Open(s.path)
+	if len(scopes) == 0 {
+		scopes = []Scope{ScopeGlobal}
+		if s.HasLocal() {
+			scopes = append(scopes, ScopeLocal)
+		}
+	}
+
+	var allRunes []*rune.Rune
+	for _, scope := range scopes {
+		var path string
+		switch scope {
+		case ScopeGlobal:
+			path = s.globalPath
+		case ScopeLocal:
+			path = s.localPath
+		}
+		if path == "" {
+			continue
+		}
+
+		runes, err := s.loadFromPath(path)
+		if err != nil {
+			return nil, fmt.Errorf("loading from %v: %w", scope, err)
+		}
+		allRunes = append(allRunes, runes...)
+	}
+
+	return allRunes, nil
+}
+
+// loadFromPath loads runes from a specific path
+func (s *Store) loadFromPath(path string) ([]*rune.Rune, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []*rune.Rune{}, nil
 		}
-		return nil, fmt.Errorf("opening store: %w", err)
+		return nil, err
 	}
 	defer file.Close()
 
@@ -55,7 +137,7 @@ func (s *Store) LoadAll() ([]*rune.Rune, error) {
 	for scanner.Scan() {
 		var r rune.Rune
 		if err := json.Unmarshal(scanner.Bytes(), &r); err != nil {
-			continue // Skip malformed
+			continue
 		}
 		runes = append(runes, &r)
 	}
@@ -63,12 +145,34 @@ func (s *Store) LoadAll() ([]*rune.Rune, error) {
 	return runes, scanner.Err()
 }
 
-// Save appends a rune
-func (s *Store) Save(r *rune.Rune) error {
+// Save appends a rune (default: local if in project, else global)
+func (s *Store) Save(r *rune.Rune, scope ...Scope) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	file, err := os.OpenFile(s.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// Determine scope
+	targetScope := ScopeGlobal
+	if s.HasLocal() && (len(scope) == 0 || scope[0] == ScopeLocal) {
+		targetScope = ScopeLocal
+	}
+	if len(scope) > 0 {
+		targetScope = scope[0]
+	}
+
+	path := s.globalPath
+	if targetScope == ScopeLocal && s.localPath != "" {
+		path = s.localPath
+	}
+
+	// Ensure directory exists for local
+	if targetScope == ScopeLocal {
+		dir := filepath.Dir(path)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("creating local store directory: %w", err)
+		}
+	}
+
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("opening store: %w", err)
 	}
@@ -89,30 +193,23 @@ func (s *Store) Save(r *rune.Rune) error {
 	return nil
 }
 
-// Update replaces existing rune
-func (s *Store) Update(updated *rune.Rune) error {
+// InitLocal creates a local .runes directory in current working directory
+func (s *Store) InitLocal() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	runes, err := s.loadAllUnlocked()
+	cwd, err := os.Getwd()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting working directory: %w", err)
 	}
 
-	found := false
-	for i, r := range runes {
-		if r.ID == updated.ID {
-			runes[i] = updated
-			found = true
-			break
-		}
+	runesDir := filepath.Join(cwd, ".runes")
+	if err := os.MkdirAll(runesDir, 0755); err != nil {
+		return fmt.Errorf("creating .runes directory: %w", err)
 	}
 
-	if !found {
-		return fmt.Errorf("rune not found: %s", updated.ID)
-	}
-
-	return s.saveAllUnlocked(runes)
+	s.localPath = filepath.Join(runesDir, "runes.jsonl")
+	return nil
 }
 
 // GetByID finds rune by ID
@@ -187,9 +284,43 @@ func (s *Store) GetBySaga(sagaID string) ([]*rune.Rune, error) {
 	return results, nil
 }
 
-// loadAllUnlocked reads without locking
-func (s *Store) loadAllUnlocked() ([]*rune.Rune, error) {
-	file, err := os.Open(s.path)
+// Update replaces existing rune (searches both scopes)
+func (s *Store) Update(updated *rune.Rune) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Try local first, then global
+	scopes := []string{s.localPath, s.globalPath}
+	for _, path := range scopes {
+		if path == "" {
+			continue
+		}
+
+		runes, err := loadFromPath(path)
+		if err != nil {
+			return err
+		}
+
+		found := false
+		for i, r := range runes {
+			if r.ID == updated.ID {
+				runes[i] = updated
+				found = true
+				break
+			}
+		}
+
+		if found {
+			return saveToPath(path, runes)
+		}
+	}
+
+	return fmt.Errorf("rune not found: %s", updated.ID)
+}
+
+// loadFromPath loads runes from a specific path
+func loadFromPath(path string) ([]*rune.Rune, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []*rune.Rune{}, nil
@@ -211,9 +342,9 @@ func (s *Store) loadAllUnlocked() ([]*rune.Rune, error) {
 	return runes, scanner.Err()
 }
 
-// saveAllUnlocked writes without locking
-func (s *Store) saveAllUnlocked(runes []*rune.Rune) error {
-	file, err := os.Create(s.path)
+// saveToPath writes runes to a specific path
+func saveToPath(path string, runes []*rune.Rune) error {
+	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("creating store: %w", err)
 	}

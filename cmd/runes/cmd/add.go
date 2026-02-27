@@ -16,6 +16,7 @@ var (
 	addTags     []string
 	addSagas    []string
 	addLearned  string
+	addGlobal   bool
 )
 
 var addCmd = &cobra.Command{
@@ -29,7 +30,8 @@ Optional: problem, solution, pattern, tags, sagas, learned
 Examples:
   runes add "Fixed auth timeout"
   runes add "Database connection pooling" --problem "Too many connections" --solution "Use connection pool"
-  runes add "OAuth retry logic" --tags auth,oauth --sagas abc123`,
+  runes add "OAuth retry logic" --tags auth,oauth --sagas abc123
+  runes add "Global pattern" --global  # Force global storage`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		title := args[0]
@@ -52,7 +54,13 @@ Examples:
 			r.LinkSaga(sagaID)
 		}
 
-		if err := st.Save(r); err != nil {
+		// Determine scope
+		var scope []store.Scope
+		if addGlobal {
+			scope = []store.Scope{store.ScopeGlobal}
+		}
+
+		if err := st.Save(r, scope...); err != nil {
 			return fmt.Errorf("saving rune: %w", err)
 		}
 
@@ -72,5 +80,6 @@ func init() {
 	addCmd.Flags().StringArrayVar(&addTags, "tag", nil, "Add tag (can use multiple)")
 	addCmd.Flags().StringArrayVar(&addSagas, "saga", nil, "Link to saga ID")
 	addCmd.Flags().StringVar(&addLearned, "learned", "", "What we learned")
+	addCmd.Flags().BoolVar(&addGlobal, "global", false, "Force global storage (default: local if in project)")
 	rootCmd.AddCommand(addCmd)
 }

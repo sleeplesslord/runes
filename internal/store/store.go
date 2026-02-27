@@ -350,6 +350,41 @@ func loadFromPath(path string) ([]*rune.Rune, error) {
 	return runes, scanner.Err()
 }
 
+// Delete removes a rune by ID
+func (s *Store) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Try local first, then global
+	scopes := []string{s.localPath, s.globalPath}
+	for _, path := range scopes {
+		if path == "" {
+			continue
+		}
+
+		runes, err := loadFromPath(path)
+		if err != nil {
+			return err
+		}
+
+		found := false
+		var filtered []*rune.Rune
+		for _, r := range runes {
+			if r.ID == id {
+				found = true
+			} else {
+				filtered = append(filtered, r)
+			}
+		}
+
+		if found {
+			return saveToPath(path, filtered)
+		}
+	}
+
+	return fmt.Errorf("rune not found: %s", id)
+}
+
 // saveToPath writes runes to a specific path
 func saveToPath(path string, runes []*rune.Rune) error {
 	file, err := os.Create(path)

@@ -29,7 +29,7 @@ func New(globalPath string) (*Store, error) {
 	s := &Store{globalPath: globalPath}
 
 	// Check for local .runes directory
-	if localPath := findLocalRunesDir(); localPath != "" {
+	if localPath := findLocalRunesDir(); localPath != "" && localPath != globalPath {
 		s.localPath = localPath
 	}
 
@@ -37,13 +37,21 @@ func New(globalPath string) (*Store, error) {
 }
 
 // findLocalRunesDir searches for .runes/ directory in current or parent directories
+// Stops at home directory to avoid finding ~/.runes as "local"
 func findLocalRunesDir() string {
 	dir, err := os.Getwd()
 	if err != nil {
 		return ""
 	}
 
+	home, _ := os.UserHomeDir()
+
 	for {
+		// Stop at home directory
+		if dir == home {
+			break
+		}
+
 		runesDir := filepath.Join(dir, ".runes")
 		if info, err := os.Stat(runesDir); err == nil && info.IsDir() {
 			return filepath.Join(runesDir, "runes.jsonl")

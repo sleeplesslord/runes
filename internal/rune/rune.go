@@ -119,6 +119,13 @@ func (r *Rune) SearchScore(query string) float64 {
 		return 0.4
 	}
 	
+	// Check linked sagas
+	for _, sagaID := range r.Sagas {
+		if strings.Contains(strings.ToLower(sagaID), query) {
+			return 0.9 // High relevance for saga links
+		}
+	}
+	
 	return 0.0
 }
 

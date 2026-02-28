@@ -37,13 +37,13 @@ func New() *Index {
 }
 
 // Build builds index from all runes
-func Build(runes []*runes.Rune) *Index {
+func Build(runeList []*runes.Rune) *Index {
 	idx := New()
-	idx.DocumentCount = len(runes)
+	idx.DocumentCount = len(runeList)
 	
 	totalLength := 0
 	
-	for _, r := range runes {
+	for _, r := range runeList {
 		terms := extractTerms(r)
 		idx.DocLengths[r.ID] = len(terms)
 		totalLength += len(terms)
@@ -118,7 +118,7 @@ func Load(path string) (*Index, error) {
 }
 
 // LoadOrBuild loads index if fresh, otherwise builds from runes
-func LoadOrBuild(indexPath string, runes []*rune.Rune, sourcePath string) (*Index, error) {
+func LoadOrBuild(indexPath string, runeList []*runes.Rune, sourcePath string) (*Index, error) {
 	// Try to load existing
 	idx, err := Load(indexPath)
 	if err == nil && !idx.IsStale(sourcePath) {
@@ -126,7 +126,7 @@ func LoadOrBuild(indexPath string, runes []*rune.Rune, sourcePath string) (*Inde
 	}
 	
 	// Build new index
-	idx = Build(runes)
+	idx = Build(runeList)
 	
 	// Save for next time
 	_ = idx.Save(indexPath) // Best effort

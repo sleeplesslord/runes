@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
-	"github.com/hbn/runes/internal/rune"
+	"github.com/hbn/runes/internal/index"
+	runes "github.com/hbn/runes/internal/rune"
 )
 
 // Store handles persistence of runes
@@ -95,7 +98,7 @@ const (
 )
 
 // LoadAll reads runes from specified scopes
-func (s *Store) LoadAll(scopes ...Scope) ([]*rune.Rune, error) {
+func (s *Store) LoadAll(scopes ...Scope) ([]*runes.Rune, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -106,7 +109,7 @@ func (s *Store) LoadAll(scopes ...Scope) ([]*rune.Rune, error) {
 		}
 	}
 
-	var allRunes []*rune.Rune
+	var allRunes []*runes.Rune
 	for _, scope := range scopes {
 		var path string
 		switch scope {
@@ -130,17 +133,17 @@ func (s *Store) LoadAll(scopes ...Scope) ([]*rune.Rune, error) {
 }
 
 // loadFromPath loads runes from a specific path
-func (s *Store) loadFromPath(path string) ([]*rune.Rune, error) {
+func (s *Store) loadFromPath(path string) ([]*runes.Rune, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []*rune.Rune{}, nil
+			return []*runes.Rune{}, nil
 		}
 		return nil, err
 	}
 	defer file.Close()
 
-	var runes []*rune.Rune
+	var runes []*runes.Rune
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		var r rune.Rune
@@ -154,7 +157,7 @@ func (s *Store) loadFromPath(path string) ([]*rune.Rune, error) {
 }
 
 // Save appends a rune (default: local if in project, else global)
-func (s *Store) Save(r *rune.Rune, scope ...Scope) error {
+func (s *Store) Save(r *runes.Rune, scope ...Scope) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -221,7 +224,7 @@ func (s *Store) InitLocal() error {
 }
 
 // GetByID finds rune by ID
-func (s *Store) GetByID(id string) (*rune.Rune, error) {
+func (s *Store) GetByID(id string) (*runes.Rune, error) {
 	runes, err := s.LoadAll()
 	if err != nil {
 		return nil, err
@@ -236,53 +239,151 @@ func (s *Store) GetByID(id string) (*rune.Rune, error) {
 	return nil, fmt.Errorf("rune not found: %s", id)
 }
 
-// Search finds runes matching query
-func (s *Store) Search(query string, limit int) ([]*rune.Rune, error) {
+// Search finds runes matching query using persistent index
+func (s *Store) Search(query string, limit int) ([]*runes.Rune, error) {
+	// Load all runes first (needed for index building and result lookup)
 	runes, err := s.LoadAll()
 	if err != nil {
 		return nil, err
 	}
 
-	// Score and filter
+	// Determine index path
+	indexPath := filepath.Join(filepath.Dir(s.globalPath), ".runes", "index.gob")
+	
+	// Try to load or build index
+	idx, err := index.Load(indexPath)
+	if err != nil || idx.IsStale(s.globalPath) {
+		// Build new index
+		idx = index.Build(runes)
+		// Save for next time (best effort)
+		_ = idx.Save(indexPath)
+	}
+
+	// Search using index
+	return s.searchWithIndex(idx, runes, query, limit)
+}
+
+// searchWithIndex performs BM25 search using persistent index
+func (s *Store) searchWithIndex(idx *index.Index, runes []*runes.Rune, query string, limit int) ([]*runes.Rune, error) {
+	// Create id->rune map for fast lookup
+	runeMap := make(map[string]*runes.Rune)
+	for _, r := range runes {
+		runeMap[r.ID] = r
+	}
+	
+	// Tokenize query
+	terms := tokenizeQuery(query)
+	if len(terms) == 0 {
+		return []*runes.Rune{}, nil
+	}
+	
+	// Find candidates (union of docs containing any query term)
+	candidates := make(map[string]bool)
+	for _, term := range terms {
+		if docs, ok := idx.TermOccurrences[term]; ok {
+			for docID := range docs {
+				candidates[docID] = true
+			}
+		}
+	}
+	
+	// Score candidates
 	type scored struct {
-		rune  *rune.Rune
+		rune  *runes.Rune
 		score float64
 	}
 	var scoredRunes []scored
-
-	for _, r := range runes {
-		score := r.SearchScore(query)
+	
+	for docID := range candidates {
+		r, ok := runeMap[docID]
+		if !ok {
+			continue
+		}
+		
+		score := s.bm25Score(idx, docID, terms)
 		if score > 0 {
 			scoredRunes = append(scoredRunes, scored{r, score})
 		}
 	}
-
+	
 	// Sort by score desc
 	sort.Slice(scoredRunes, func(i, j int) bool {
 		return scoredRunes[i].score > scoredRunes[j].score
 	})
-
+	
 	// Apply limit
 	if limit > 0 && limit < len(scoredRunes) {
 		scoredRunes = scoredRunes[:limit]
 	}
-
-	var results []*rune.Rune
+	
+	var results []*runes.Rune
 	for _, s := range scoredRunes {
 		results = append(results, s.rune)
 	}
-
+	
 	return results, nil
 }
 
+// tokenizeQuery splits query into terms
+func tokenizeQuery(text string) []string {
+	words := strings.Fields(strings.ToLower(text))
+	var terms []string
+	
+	for _, w := range words {
+		w = strings.TrimFunc(w, func(r rune) bool {
+			return r < 'a' || r > 'z'
+		})
+		if len(w) >= 3 {
+			terms = append(terms, w)
+		}
+	}
+	
+	return terms
+}
+
+// bm25Score calculates BM25 relevance score
+func (s *Store) bm25Score(idx *index.Index, docID string, queryTerms []string) float64 {
+	const k1 = 1.2
+	const b = 0.75
+	
+	docLen := float64(idx.DocLengths[docID])
+	if docLen == 0 {
+		return 0
+	}
+	
+	score := 0.0
+	N := float64(idx.DocumentCount)
+	
+	for _, term := range queryTerms {
+		n, ok := idx.TermDocFreq[term]
+		if !ok {
+			continue
+		}
+		
+		// IDF: log((N - n + 0.5) / (n + 0.5))
+		idf := math.Log((N - float64(n) + 0.5) / (float64(n) + 0.5))
+		
+		// Term frequency in this document
+		f := float64(idx.TermOccurrences[term][docID])
+		
+		// BM25 formula
+		denom := f + k1*(1-b+b*docLen/idx.AvgDocLength)
+		if denom > 0 {
+			score += idf * f * (k1 + 1) / denom
+		}
+	}
+	
+	return score
+}
+
 // GetBySaga finds runes linked to saga
-func (s *Store) GetBySaga(sagaID string) ([]*rune.Rune, error) {
+func (s *Store) GetBySaga(sagaID string) ([]*runes.Rune, error) {
 	runes, err := s.LoadAll()
 	if err != nil {
 		return nil, err
 	}
 
-	var results []*rune.Rune
+	var results []*runes.Rune
 	for _, r := range runes {
 		if r.HasSaga(sagaID) {
 			results = append(results, r)
@@ -293,7 +394,7 @@ func (s *Store) GetBySaga(sagaID string) ([]*rune.Rune, error) {
 }
 
 // Update replaces existing rune (searches both scopes)
-func (s *Store) Update(updated *rune.Rune) error {
+func (s *Store) Update(updated *runes.Rune) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -327,17 +428,17 @@ func (s *Store) Update(updated *rune.Rune) error {
 }
 
 // loadFromPath loads runes from a specific path
-func loadFromPath(path string) ([]*rune.Rune, error) {
+func loadFromPath(path string) ([]*runes.Rune, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []*rune.Rune{}, nil
+			return []*runes.Rune{}, nil
 		}
 		return nil, err
 	}
 	defer file.Close()
 
-	var runes []*rune.Rune
+	var runes []*runes.Rune
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		var r rune.Rune
@@ -368,7 +469,7 @@ func (s *Store) Delete(id string) error {
 		}
 
 		found := false
-		var filtered []*rune.Rune
+		var filtered []*runes.Rune
 		for _, r := range runes {
 			if r.ID == id {
 				found = true
@@ -386,7 +487,7 @@ func (s *Store) Delete(id string) error {
 }
 
 // saveToPath writes runes to a specific path
-func saveToPath(path string, runes []*rune.Rune) error {
+func saveToPath(path string, runes []*runes.Rune) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("creating store: %w", err)

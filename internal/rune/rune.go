@@ -209,3 +209,68 @@ func generateID() string {
 	}
 	return string(result)
 }
+
+// GetContentTerms extracts searchable terms from rune content
+func (r *Rune) GetContentTerms() []string {
+	var terms []string
+	seen := make(map[string]bool)
+	
+	// Extract from all fields
+	sources := []string{r.Title, r.Problem, r.Solution, r.Pattern, r.Learned}
+	for _, text := range sources {
+		words := strings.Fields(strings.ToLower(text))
+		for _, w := range words {
+			// Remove punctuation
+			w = strings.TrimFunc(w, func(r rune) bool {
+				return r < 'a' || r > 'z'
+			})
+			if len(w) >= 3 && !seen[w] {
+				terms = append(terms, w)
+				seen[w] = true
+			}
+		}
+	}
+	
+	// Add tags
+	for _, tag := range r.Tags {
+		tag = strings.ToLower(tag)
+		if !seen[tag] {
+			terms = append(terms, tag)
+			seen[tag] = true
+		}
+	}
+	
+	return terms
+}
+
+// SimilarityScore calculates content similarity with another rune (0-1)
+func (r *Rune) SimilarityScore(other *Rune) float64 {
+	// Get term sets
+	termsA := r.GetContentTerms()
+	termsB := other.GetContentTerms()
+	
+	if len(termsA) == 0 || len(termsB) == 0 {
+		return 0.0
+	}
+	
+	// Count matching terms
+	setB := make(map[string]bool)
+	for _, t := range termsB {
+		setB[t] = true
+	}
+	
+	matches := 0
+	for _, t := range termsA {
+		if setB[t] {
+			matches++
+		}
+	}
+	
+	// Jaccard similarity: |A ∩ B| / |A ∪ B|
+	union := len(termsA) + len(termsB) - matches
+	if union == 0 {
+		return 0.0
+	}
+	
+	return float64(matches) / float64(union)
+}

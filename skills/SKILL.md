@@ -100,6 +100,54 @@ runes search "pattern-name"
 5. **Link to sagas** — Connects tasks to knowledge
 6. **Write learned** — The insight is the value
 
+## Creating Discoverable Runes
+
+**Good runes are found later.** Make them searchable:
+
+### **1. Use Common Keywords in Title**
+```bash
+# Good: Uses terms people search for
+runes add "Fix Kubernetes pod startup timeout"
+
+# Bad: Too specific/technical
+runes add "K8s prod incident 2024-03-15"
+```
+
+### **2. Include Synonyms in Problem**
+```bash
+runes add "Database connection pool exhausted" \
+  --problem "Getting 'too many connections' errors. \\
+            Connection pool full. Can't connect to DB. \\
+            MySQL/Postgres connection limit reached."
+
+# Now searchable by: database, connection, pool, MySQL, Postgres, DB
+```
+
+### **3. Use Standard Pattern Names**
+```bash
+# Good: Recognizable pattern
+runes add "..." --pattern "circuit-breaker"
+
+# Bad: Custom/obscure name
+runes add "..." --pattern "johns-special-fix"
+```
+
+### **4. Tag Generously**
+```bash
+runes add "..." --tag auth --tag oauth --tag timeout \
+  --tag retry --tag production --tag api
+
+# More tags = more ways to discover
+```
+
+### **5. Write "Learned" for Future You**
+```bash
+runes add "..." --learned "When OAuth times out, retry BEFORE \\
+  refreshing token. Token refresh on timeout causes cascading failures."
+
+# This insight prevents the same mistake and is searchable
+```
+
 ## Common Patterns
 
 ### Pattern: Bug Hunt

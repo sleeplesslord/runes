@@ -87,46 +87,115 @@ func (r *Rune) LinkSaga(sagaID string) {
 	r.UpdatedAt = time.Now()
 }
 
-// SearchScore returns relevance score for query (0-1)
+// SearchScore returns relevance score for query using BM25-like ranking
 func (r *Rune) SearchScore(query string) float64 {
 	query = strings.ToLower(query)
+	queryTerms := strings.Fields(query)
 	
-	// Check title (highest weight)
-	if strings.Contains(strings.ToLower(r.Title), query) {
-		return 1.0
+	if len(queryTerms) == 0 {
+		return 0.0
 	}
 	
-	// Check problem/solution
-	if strings.Contains(strings.ToLower(r.Problem), query) {
-		return 0.8
-	}
-	if strings.Contains(strings.ToLower(r.Solution), query) {
-		return 0.7
+	// BM25 parameters
+	const k1 = 1.2  // term frequency saturation
+	const b = 0.75  // length normalization
+	
+	// Field weights (title most important)
+	weights := map[string]float64{
+		"title":    3.0,
+		"pattern":  2.5,
+		"tags":     2.0,
+		"problem":  1.5,
+		"solution": 1.3,
+		"learned":  1.0,
 	}
 	
-	// Check tags
-	for _, tag := range r.Tags {
-		if strings.Contains(strings.ToLower(tag), query) {
-			return 0.6
+	// Calculate field lengths (for normalization)
+	fieldLengths := map[string]int{
+		"title":    len(strings.Fields(r.Title)),
+		"pattern":  len(strings.Fields(r.Pattern)),
+		"tags":     len(r.Tags),
+		"problem":  len(strings.Fields(r.Problem)),
+		"solution": len(strings.Fields(r.Solution)),
+		"learned":  len(strings.Fields(r.Learned)),
+	}
+	
+	// Average field lengths (approximate)
+	avgLengths := map[string]float64{
+		"title":    10.0,
+		"pattern":  3.0,
+		"tags":     3.0,
+		"problem":  50.0,
+		"solution": 50.0,
+		"learned":  30.0,
+	}
+	
+	score := 0.0
+	
+	for _, term := range queryTerms {
+		// Score each field for this term
+		for field, weight := range weights {
+			freq := r.termFrequency(term, field)
+			if freq == 0 {
+				continue
+			}
+			
+			fieldLen := float64(fieldLengths[field])
+			avgLen := avgLengths[field]
+			
+			// BM25 formula: IDF * (freq * (k1 + 1)) / (freq + k1 * (1 - b + b * fieldLen/avgLen))
+			// Simplified: just use term frequency with length normalization
+			norm := 1.0 - b + b*(fieldLen/avgLen)
+			fieldScore := weight * (freq * (k1 + 1)) / (freq + k1*norm)
+			
+			score += fieldScore
 		}
 	}
 	
-	// Check pattern/learned
-	if strings.Contains(strings.ToLower(r.Pattern), query) {
-		return 0.5
-	}
-	if strings.Contains(strings.ToLower(r.Learned), query) {
-		return 0.4
-	}
-	
-	// Check linked sagas
-	for _, sagaID := range r.Sagas {
-		if strings.Contains(strings.ToLower(sagaID), query) {
-			return 0.9 // High relevance for saga links
+	// Normalize by number of query terms
+	return score / float64(len(queryTerms))
+}
+
+// termFrequency counts occurrences of term in field
+func (r *Rune) termFrequency(term, field string) float64 {
+	text := ""
+	switch field {
+	case "title":
+		text = r.Title
+	case "pattern":
+		text = r.Pattern
+	case "problem":
+		text = r.Problem
+	case "solution":
+		text = r.Solution
+	case "learned":
+		text = r.Learned
+	case "tags":
+		count := 0.0
+		for _, tag := range r.Tags {
+			if strings.Contains(strings.ToLower(tag), term) {
+				count += 1.0
+			}
 		}
+		return count
 	}
 	
-	return 0.0
+	// Count occurrences in text
+	text = strings.ToLower(text)
+	term = strings.ToLower(term)
+	count := 0.0
+	for {
+		idx := strings.Index(text, term)
+		if idx == -1 {
+			break
+		}
+		count++
+		if idx+len(term) >= len(text) {
+			break
+		}
+		text = text[idx+len(term):]
+	}
+	return count
 }
 
 // generateID creates unique identifier

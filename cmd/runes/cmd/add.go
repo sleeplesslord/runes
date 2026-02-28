@@ -54,6 +54,11 @@ Examples:
 			r.LinkSaga(sagaID)
 		}
 
+		// Validate required fields for compound engineering
+		if err := validateRuneFields(addProblem, addSolution); err != nil {
+			return err
+		}
+
 		// Determine scope
 		var scope []store.Scope
 		if addGlobal {
@@ -71,6 +76,21 @@ Examples:
 
 		return nil
 	},
+}
+
+// validateRunesFields checks required fields for compound engineering
+func validateRuneFields(problem, solution string) error {
+	var missing []string
+	if strings.TrimSpace(problem) == "" {
+		missing = append(missing, "--problem")
+	}
+	if strings.TrimSpace(solution) == "" {
+		missing = append(missing, "--solution")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("required for compound engineering: %s (capture what you learned)", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func init() {

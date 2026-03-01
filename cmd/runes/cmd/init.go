@@ -23,6 +23,13 @@ var initCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Initialized local runes storage in %s\n", filepath.Dir(st.LocalPath()))
+		fmt.Println()
+		fmt.Println("Basic usage:")
+		fmt.Println("  runes search \"...\"   # Find existing solutions")
+		fmt.Println("  runes add \"...\"      # Capture new solution")
+		fmt.Println("  runes list            # Browse all runes")
+		fmt.Println()
+		fmt.Println("See AGENTS.md for full documentation")
 		return nil
 	},
 }

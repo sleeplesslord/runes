@@ -12,7 +12,7 @@ import (
 	"sync"
 
 	"github.com/hbn/runes/internal/index"
-	runes "github.com/hbn/runes/internal/rune"
+	runepkg "github.com/hbn/runes/internal/rune"
 )
 
 // Store handles persistence of runes
@@ -98,7 +98,7 @@ const (
 )
 
 // LoadAll reads runes from specified scopes
-func (s *Store) LoadAll(scopes ...Scope) ([]*runes.Rune, error) {
+func (s *Store) LoadAll(scopes ...Scope) ([]*runepkg.Rune, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -109,7 +109,7 @@ func (s *Store) LoadAll(scopes ...Scope) ([]*runes.Rune, error) {
 		}
 	}
 
-	var allRunes []*runes.Rune
+	var allRunes []*runepkg.Rune
 	for _, scope := range scopes {
 		var path string
 		switch scope {
@@ -133,20 +133,20 @@ func (s *Store) LoadAll(scopes ...Scope) ([]*runes.Rune, error) {
 }
 
 // loadFromPath loads runes from a specific path
-func (s *Store) loadFromPath(path string) ([]*runes.Rune, error) {
+func (s *Store) loadFromPath(path string) ([]*runepkg.Rune, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []*runes.Rune{}, nil
+			return []*runepkg.Rune{}, nil
 		}
 		return nil, err
 	}
 	defer file.Close()
 
-	var runes []*runes.Rune
+	var runes []*runepkg.Rune
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		var r rune.Rune
+		var r runepkg.Rune
 		if err := json.Unmarshal(scanner.Bytes(), &r); err != nil {
 			continue
 		}
@@ -157,7 +157,7 @@ func (s *Store) loadFromPath(path string) ([]*runes.Rune, error) {
 }
 
 // Save appends a rune (default: local if in project, else global)
-func (s *Store) Save(r *runes.Rune, scope ...Scope) error {
+func (s *Store) Save(r *runepkg.Rune, scope ...Scope) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -224,7 +224,7 @@ func (s *Store) InitLocal() error {
 }
 
 // GetByID finds rune by ID
-func (s *Store) GetByID(id string) (*runes.Rune, error) {
+func (s *Store) GetByID(id string) (*runepkg.Rune, error) {
 	runes, err := s.LoadAll()
 	if err != nil {
 		return nil, err
@@ -240,7 +240,7 @@ func (s *Store) GetByID(id string) (*runes.Rune, error) {
 }
 
 // Search finds runes matching query using persistent index
-func (s *Store) Search(query string, limit int) ([]*runes.Rune, error) {
+func (s *Store) Search(query string, limit int) ([]*runepkg.Rune, error) {
 	// Load all runes first (needed for index building and result lookup)
 	runes, err := s.LoadAll()
 	if err != nil {
@@ -264,9 +264,9 @@ func (s *Store) Search(query string, limit int) ([]*runes.Rune, error) {
 }
 
 // searchWithIndex performs BM25 search using persistent index
-func (s *Store) searchWithIndex(idx *index.Index, runes []*runes.Rune, query string, limit int) ([]*runes.Rune, error) {
+func (s *Store) searchWithIndex(idx *index.Index, runes []*runepkg.Rune, query string, limit int) ([]*runepkg.Rune, error) {
 	// Create id->rune map for fast lookup
-	runeMap := make(map[string]*runes.Rune)
+	runeMap := make(map[string]*runepkg.Rune)
 	for _, r := range runes {
 		runeMap[r.ID] = r
 	}
@@ -274,7 +274,7 @@ func (s *Store) searchWithIndex(idx *index.Index, runes []*runes.Rune, query str
 	// Tokenize query
 	terms := tokenizeQuery(query)
 	if len(terms) == 0 {
-		return []*runes.Rune{}, nil
+		return []*runepkg.Rune{}, nil
 	}
 	
 	// Find candidates (union of docs containing any query term)
@@ -289,7 +289,7 @@ func (s *Store) searchWithIndex(idx *index.Index, runes []*runes.Rune, query str
 	
 	// Score candidates
 	type scored struct {
-		rune  *runes.Rune
+		rune  *runepkg.Rune
 		score float64
 	}
 	var scoredRunes []scored
@@ -316,7 +316,7 @@ func (s *Store) searchWithIndex(idx *index.Index, runes []*runes.Rune, query str
 		scoredRunes = scoredRunes[:limit]
 	}
 	
-	var results []*runes.Rune
+	var results []*runepkg.Rune
 	for _, s := range scoredRunes {
 		results = append(results, s.rune)
 	}
@@ -330,8 +330,8 @@ func tokenizeQuery(text string) []string {
 	var terms []string
 	
 	for _, w := range words {
-		w = strings.TrimFunc(w, func(r rune) bool {
-			return r < 'a' || r > 'z'
+		w = strings.TrimFunc(w, func(ch rune) bool {
+			return ch < 'a' || ch > 'z'
 		})
 		if len(w) >= 3 {
 			terms = append(terms, w)
@@ -377,13 +377,13 @@ func (s *Store) bm25Score(idx *index.Index, docID string, queryTerms []string) f
 }
 
 // GetBySaga finds runes linked to saga
-func (s *Store) GetBySaga(sagaID string) ([]*runes.Rune, error) {
+func (s *Store) GetBySaga(sagaID string) ([]*runepkg.Rune, error) {
 	runes, err := s.LoadAll()
 	if err != nil {
 		return nil, err
 	}
 
-	var results []*runes.Rune
+	var results []*runepkg.Rune
 	for _, r := range runes {
 		if r.HasSaga(sagaID) {
 			results = append(results, r)
@@ -394,7 +394,7 @@ func (s *Store) GetBySaga(sagaID string) ([]*runes.Rune, error) {
 }
 
 // Update replaces existing rune (searches both scopes)
-func (s *Store) Update(updated *runes.Rune) error {
+func (s *Store) Update(updated *runepkg.Rune) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -428,20 +428,20 @@ func (s *Store) Update(updated *runes.Rune) error {
 }
 
 // loadFromPath loads runes from a specific path
-func loadFromPath(path string) ([]*runes.Rune, error) {
+func loadFromPath(path string) ([]*runepkg.Rune, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []*runes.Rune{}, nil
+			return []*runepkg.Rune{}, nil
 		}
 		return nil, err
 	}
 	defer file.Close()
 
-	var runes []*runes.Rune
+	var runes []*runepkg.Rune
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		var r rune.Rune
+		var r runepkg.Rune
 		if err := json.Unmarshal(scanner.Bytes(), &r); err != nil {
 			continue
 		}
@@ -469,7 +469,7 @@ func (s *Store) Delete(id string) error {
 		}
 
 		found := false
-		var filtered []*runes.Rune
+		var filtered []*runepkg.Rune
 		for _, r := range runes {
 			if r.ID == id {
 				found = true
@@ -487,7 +487,7 @@ func (s *Store) Delete(id string) error {
 }
 
 // saveToPath writes runes to a specific path
-func saveToPath(path string, runes []*runes.Rune) error {
+func saveToPath(path string, runes []*runepkg.Rune) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("creating store: %w", err)

@@ -62,26 +62,54 @@ func addRunesToAgents() error {
 	// Append runes section
 	runesSection := "\n## Runes - Knowledge Capture\n\n" +
 		"This project uses [Runes](https://github.com/sleeplesslord/runes) for knowledge management.\n\n" +
-		"### Quick Start\n\n" +
+		"### What Are Runes?\n\n" +
+		"Runes are atomic, reusable solutions to problems you've solved. Think of them as a personal Stack Overflow " +
+		"that lives in your workspace — a searchable database of fixes, configurations, workarounds, and insights.\n\n" +
+		"### The Core Idea\n\n" +
+		"Every time you solve a problem, you have a choice: let that knowledge evaporate, or encode it as a rune. " +
+		"Runes capture not just *what* you did, but *why* and *when* it matters. Over time, this creates compound " +
+		"returns — each new problem builds on prior solutions instead of starting from zero.\n\n" +
+		"### When to Capture a Rune\n\n" +
+		"**Capture after solving:**\n" +
+		"- You spent >10 minutes figuring something out\n" +
+		"- You fixed an error you might hit again\n" +
+		"- You configured something fiddly (tools, APIs, environments)\n" +
+		"- You found a non-obvious solution to a common problem\n" +
+		"- You want to remember \"how did I do that last time?\"\n\n" +
+		"**Don't capture:**\n" +
+		"- Routine tasks (already in saga)\n" +
+		"- Unfinished investigations\n" +
+		"- Hypothetical solutions\n\n" +
+		"### The Workflow\n\n" +
 		"```bash\n" +
-		"runes search \"...\"    # Check if solution exists before solving\n" +
-		"runes add \"...\"       # Capture solution after solving\n" +
-		"runes list            # Browse all captured knowledge\n" +
+		"# 1. Before solving, check if you already know\n" +
+		"runes search \"docker compose networking\"\n\n" +
+		"# 2. Solve the problem...\n\n" +
+		"# 3. After solving, capture it\n" +
+		"runes add \"Fixed Docker Compose DNS\" --problem \"...\" --solution \"...\"\n\n" +
+		"# 4. Later, when the same problem appears\n" +
+		"runes search \"docker dns\"\n" +
+		"# → Returns your solution instantly\n" +
 		"```\n\n" +
-		"### Basic Commands\n\n" +
-		"| Command | Description |\n" +
-		"|---------|-------------|\n" +
-		"| `runes search \"query\"` | Find prior solutions |\n" +
-		"| `runes add \"title\"` | Create new knowledge entry |\n" +
-		"| `runes list` | Show all runes |\n" +
-		"| `runes show <id>` | Read full rune details |\n" +
-		"| `runes tags` | List all tags |\n" +
-		"| `runes pattern` | Browse named patterns |\n\n" +
+		"### Quick Reference\n\n" +
+		"```bash\n" +
+		"runes search \"...\"    # Check if solution exists (FIRST)\n" +
+		"runes add \"...\"       # Capture solution after solving (SECOND)\n" +
+		"runes list              # Browse all runes\n" +
+		"runes show <id>         # View full rune details\n" +
+		"runes tags              # List all tags\n" +
+		"runes pattern           # Browse named patterns\n" +
+		"```\n\n" +
 		"### Creating Discoverable Runes\n\n" +
 		"1. **Use common keywords** in titles (\"auth timeout\" not \"incident-2024\")\n" +
 		"2. **Include synonyms** in problem descriptions\n" +
 		"3. **Tag generously** — more tags = more ways to find\n" +
 		"4. **Write \"learned\"** — capture the insight, not just the fix\n\n" +
+		"### Integration with Saga\n\n" +
+		"Runes complement sagas:\n" +
+		"- **Sagas** track *work in progress* (tasks, projects, things to do)\n" +
+		"- **Runes** capture *knowledge gained* (solutions, fixes, things learned)\n" +
+		"When you finish a saga, you often have new runes to add. When you start a saga, search runes to avoid repeating past work.\n\n" +
 		"See `skills/runes-agent/SKILL.md` for full agent documentation.\n"
 	
 	// Append to file

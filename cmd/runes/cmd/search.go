@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/hbn/runes/internal/rune"
@@ -11,6 +13,17 @@ import (
 
 var searchLimit int
 var searchSaga string
+var searchJSON bool
+
+type queryResult struct {
+	Query   string       `json:"query"`
+	Results []*rune.Rune `json:"results"`
+}
+
+type jsonResponse struct {
+	Queries []queryResult `json:"queries,omitempty"`
+	Runes   []*rune.Rune  `json:"runes,omitempty"`
+}
 
 var searchCmd = &cobra.Command{
 	Use:   "search [<query>...]",
@@ -57,6 +70,9 @@ Examples:
 				return fmt.Errorf("search requires at least one query or --saga flag")
 			}
 			// Display saga-filtered results
+			if searchJSON {
+				return outputJSON(nil, runes)
+			}
 			if len(runes) == 0 {
 				fmt.Println("No runes found.")
 				return nil
@@ -70,6 +86,21 @@ Examples:
 		}
 
 		// Search each query
+		if searchJSON {
+			var allResults []queryResult
+			for _, query := range args {
+				results, err := store.SearchRunes(runes, query, searchLimit)
+				if err != nil {
+					return fmt.Errorf("searching for %q: %w", query, err)
+				}
+				allResults = append(allResults, queryResult{
+					Query:   query,
+					Results: results,
+				})
+			}
+			return outputJSON(allResults, nil)
+		}
+
 		for i, query := range args {
 			// Add separator between queries (but not before first)
 			if i > 0 {
@@ -121,8 +152,20 @@ func displayRune(r *rune.Rune) {
 	fmt.Println()
 }
 
+func outputJSON(queries []queryResult, allRunes []*rune.Rune) error {
+	resp := jsonResponse{
+		Queries: queries,
+		Runes:   allRunes,
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(resp)
+}
+
 func init() {
 	searchCmd.Flags().IntVar(&searchLimit, "limit", 10, "Maximum results")
 	searchCmd.Flags().StringVar(&searchSaga, "saga", "", "Filter by saga ID")
+	searchCmd.Flags().BoolVar(&searchJSON, "json", false, "Output results as JSON")
 	rootCmd.AddCommand(searchCmd)
 }

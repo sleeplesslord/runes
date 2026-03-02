@@ -1,5 +1,5 @@
 ---
-name: runes-agent
+name: runes
 description: Integration with Runes knowledge management system for capturing and discovering solutions. Use when documenting solved problems, searching for prior solutions, or avoiding solving the same problem twice. Triggers on runes-related tasks like adding entries, searching solutions, linking to sagas, and querying knowledge.
 ---
 

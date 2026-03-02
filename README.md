@@ -247,7 +247,7 @@ Use Saga for *doing*. Use Runes for *knowing*.
 ## See Also
 
 - [Saga](https://github.com/sleeplesslord/saga) — Task management
-- [Agent Skill](skills/runes-agent/) — Teach agents to use Runes
+- [Agent Skill](skills/) — Teach agents to use Runes
 
 ## License
 

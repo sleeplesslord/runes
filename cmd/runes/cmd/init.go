@@ -25,7 +25,7 @@ var initCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Initialized local runes storage in %s\n", filepath.Dir(st.LocalPath()))
-		
+
 		// Add runes section to AGENTS.md if it exists
 		if err := addRunesToAgents(); err != nil {
 			// Non-fatal: just print the help text
@@ -35,30 +35,30 @@ var initCmd = &cobra.Command{
 			fmt.Println("  runes add \"...\"      # Capture new solution")
 			fmt.Println("  runes list            # Browse all runes")
 		}
-		
+
 		return nil
 	},
 }
 
 func addRunesToAgents() error {
 	agentsPath := "AGENTS.md"
-	
+
 	// Check if file exists
 	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
 		return err
 	}
-	
+
 	// Read existing content
 	content, err := os.ReadFile(agentsPath)
 	if err != nil {
 		return err
 	}
-	
+
 	// Check if runes section already exists
 	if strings.Contains(string(content), "## Runes") {
 		return nil // Already exists, skip
 	}
-	
+
 	// Append runes section
 	runesSection := "\n## Runes - Knowledge Capture\n\n" +
 		"This project uses [Runes](https://github.com/sleeplesslord/runes) for knowledge management.\n\n" +
@@ -110,19 +110,19 @@ func addRunesToAgents() error {
 		"- **Sagas** track *work in progress* (tasks, projects, things to do)\n" +
 		"- **Runes** capture *knowledge gained* (solutions, fixes, things learned)\n" +
 		"When you finish a saga, you often have new runes to add. When you start a saga, search runes to avoid repeating past work.\n\n" +
-		"See `skills/runes-agent/SKILL.md` for full agent documentation.\n"
-	
+		"See `skills/SKILL.md` for full agent documentation.\n"
+
 	// Append to file
 	f, err := os.OpenFile(agentsPath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	
+
 	if _, err := f.WriteString(runesSection); err != nil {
 		return err
 	}
-	
+
 	fmt.Println("\n✓ Added Runes section to AGENTS.md")
 	return nil
 }

@@ -21,6 +21,7 @@ Runes captures **solutions to problems** so you don't solve them twice. It's com
 # Search first (ALWAYS DO THIS)
 runes search "auth timeout"        # Have we solved this?
 runes search "database" --limit 5  # Top 5 matches
+runes search "auth" "timeout"      # Multiple queries at once
 
 # Capture solution (after solving)
 runes add "Fixed intermittent auth" \
@@ -46,6 +47,11 @@ runes add "..." --saga abc123
 runes search "problem description"
 runes search "error message"
 runes search "technology name"
+```
+
+**Search multiple terms at once** (saves tool calls):
+```bash
+runes search "auth" "timeout" "retry"
 ```
 
 **If rune exists:**

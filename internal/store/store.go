@@ -243,6 +243,11 @@ func (s *Store) Search(query string, limit int) ([]*rune.Rune, error) {
 		return nil, err
 	}
 
+	return SearchRunes(runes, query, limit)
+}
+
+// SearchRunes finds runes matching query from already loaded runes
+func SearchRunes(runes []*rune.Rune, query string, limit int) ([]*rune.Rune, error) {
 	// Score and filter
 	type scored struct {
 		rune  *rune.Rune

@@ -11,47 +11,65 @@ import (
 var searchLimit int
 
 var searchCmd = &cobra.Command{
-	Use:   "search <query>",
+	Use:   "search <query>...",
 	Short: "Search runes",
 	Long: `Find runes matching query in title, problem, solution, tags, or pattern.
 
+Multiple queries can be provided to search for different terms at once.
+Each query produces separate results.
+
 Examples:
   runes search "auth timeout"
-  runes search "database" --limit 5`,
-	Args: cobra.ExactArgs(1),
+  runes search "database" --limit 5
+  runes search "auth" "database" "timeout"`,
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		query := args[0]
-
 		st, err := store.New(store.DefaultPath())
 		if err != nil {
 			return fmt.Errorf("initializing store: %w", err)
 		}
 
-		results, err := st.Search(query, searchLimit)
+		// Load all runes once for all queries
+		runes, err := st.LoadAll()
 		if err != nil {
-			return fmt.Errorf("searching: %w", err)
+			return fmt.Errorf("loading runes: %w", err)
 		}
 
-		if len(results) == 0 {
-			fmt.Println("No runes found.")
-			return nil
-		}
+		// Search each query
+		for i, query := range args {
+			// Add separator between queries (but not before first)
+			if i > 0 {
+				fmt.Println(strings.Repeat("-", 40))
+			}
 
-		fmt.Printf("Found %d rune(s):\n\n", len(results))
+			results, err := store.SearchRunes(runes, query, searchLimit)
+			if err != nil {
+				return fmt.Errorf("searching for %q: %w", query, err)
+			}
 
-		for _, r := range results {
-			fmt.Printf("%-6s %s\n", r.ID, r.Title)
-			if r.Problem != "" {
-				problem := r.Problem
-				if len(problem) > 50 {
-					problem = problem[:47] + "..."
+			fmt.Printf("Query: %q\n", query)
+
+			if len(results) == 0 {
+				fmt.Println("No runes found.")
+				continue
+			}
+
+			fmt.Printf("Found %d rune(s):\n\n", len(results))
+
+			for _, r := range results {
+				fmt.Printf("  %-6s %s\n", r.ID, r.Title)
+				if r.Problem != "" {
+					problem := r.Problem
+					if len(problem) > 50 {
+						problem = problem[:47] + "..."
+					}
+					fmt.Printf("         Problem: %s\n", problem)
 				}
-				fmt.Printf("       Problem: %s\n", problem)
+				if len(r.Tags) > 0 {
+					fmt.Printf("         Tags: [%s]\n", strings.Join(r.Tags, ", "))
+				}
+				fmt.Println()
 			}
-			if len(r.Tags) > 0 {
-				fmt.Printf("       Tags: [%s]\n", strings.Join(r.Tags, ", "))
-			}
-			fmt.Println()
 		}
 
 		return nil

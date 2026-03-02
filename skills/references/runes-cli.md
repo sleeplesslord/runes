@@ -15,7 +15,10 @@ Storage: `~/.runes/runes.jsonl` (JSON Lines format)
 ```bash
 runes search "query"              # Search all fields
 runes search "auth" --limit 5     # Top 5 results
+runes search "auth" "timeout"     # Multiple queries at once
 ```
+
+**Multiple queries:** Each argument is a separate search. Results are shown per-query with separators. This is more efficient than running separate commands.
 
 **Searches:** title, problem, solution, tags, pattern, learned
 
@@ -57,6 +60,9 @@ Shows all fields with formatting.
 # Always search first
 runes search "what I'm about to do"
 runes search "error I'm seeing"
+
+# Or search multiple terms at once
+runes search "auth" "timeout" "retry"
 
 # If found, read it
 runes show abc123

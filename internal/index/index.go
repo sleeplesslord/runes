@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	runes "github.com/hbn/runes/internal/rune"
+	runes "github.com/sleeplesslord/runes/internal/rune"
 )
 
 // Index represents persistent inverted index for BM25

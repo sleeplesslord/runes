@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/hbn/runes/cmd/runes/cmd"
+	"github.com/sleeplesslord/runes/cmd/runes/cmd"
 )
 
 func main() {

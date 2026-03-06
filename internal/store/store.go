@@ -9,7 +9,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/hbn/runes/internal/rune"
+	"github.com/sleeplesslord/runes/internal/rune"
 )
 
 // Store handles persistence of runes

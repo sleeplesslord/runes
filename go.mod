@@ -1,4 +1,4 @@
-module github.com/hbn/runes
+module github.com/sleeplesslord/runes
 
 go 1.25.6
 

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hbn/runes/internal/store"
+	"github.com/sleeplesslord/runes/internal/store"
 	"github.com/spf13/cobra"
 )
 

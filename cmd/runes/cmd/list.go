@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hbn/runes/internal/rune"
-	"github.com/hbn/runes/internal/store"
+	"github.com/sleeplesslord/runes/internal/rune"
+	"github.com/sleeplesslord/runes/internal/store"
 	"github.com/spf13/cobra"
 )
 
